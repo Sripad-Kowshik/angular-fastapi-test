@@ -1,0 +1,34 @@
+# Use an official Python runtime as a parent image
+FROM python:3.10-slim AS backend-builder
+WORKDIR /packages
+COPY requirements.txt .
+# RUN pip install -r requirements.txt
+RUN apt-get update && apt-get install -y --no-install-recommends git gcc python3-dev && rm -rf /var/lib/apt/lists/*
+RUN pip download --dest /packages -r requirements.txt
+
+# Use an official Python runtime as a parent image
+FROM python:3.10-slim AS backend-runner
+
+# Set the working directory in the container
+WORKDIR /backend
+
+COPY --from=backend-builder /packages /backend/packages
+
+# Copy requirements.txt and install dependencies
+COPY requirements.txt .
+RUN pip install --no-index --find-links="file:///backend/packages" -r requirements.txt
+
+# Copy the current directory contents into the container at /workbench-ui
+COPY backend /backend
+
+# Expose port 8082 for the backend
+EXPOSE 8082
+
+# Create a startup script to show port information
+RUN echo '#!/bin/bash' > /backend/start.sh && \
+    echo 'echo "Starting the backend application..."' >> /backend/start.sh && \
+    echo 'echo "Backend running at port: 8082"' >> /backend/start.sh && \
+    echo 'uvicorn backend.main:app --host 0.0.0.0 --port 8082 --log-level debug' >> /backend/start.sh && \
+    chmod +x /backend/start.sh
+
+CMD ["/backend/start.sh"]
